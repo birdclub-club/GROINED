@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skateboarding Hamster</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div id="scoreBar">
+            <span id="currentScore">0</span>
+            <span id="highScore" class="high-score">HI: 0</span>
+            <span id="currentWager" class="wager">Wager: 0 $GRIND</span>
+            <span id="walletBalance" class="wallet">Balance: 10 $GRIND</span>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="sound-controls">
+            <div class="sound-toggle-container">
+                <span class="sound-label">MUSIC</span>
+                <button id="musicToggle" class="sound-toggle" title="Toggle Music">
+                    <span class="toggle-indicator"></span>
+                </button>
+            </div>
+            <div class="sound-toggle-container">
+                <span class="sound-label">SOUND</span>
+                <button id="sfxToggle" class="sound-toggle" title="Toggle Sound Effects">
+                    <span class="toggle-indicator"></span>
+                </button>
+            </div>
+        </div>
+        <div id="startScreen" class="screen">
+            <h1 class="pixel-title">GROINED</h1>
+            <p class="subtitle">Jump Obstacles to Win $GRIND</p>
+            <div class="wager-form">
+                <label for="wagerAmount">Select Wager Amount:</label>
+                <select id="wagerAmount" class="pixel-select">
+                    <option value="1">1 $GRIND</option>
+                    <option value="5">5 $GRIND</option>
+                    <option value="10">10 $GRIND</option>
+                    <option value="25">25 $GRIND</option>
+                    <option value="50">50 $GRIND</option>
+                    <option value="100">100 $GRIND</option>
+                </select>
+                <button id="placeWager" class="pixel-button">Place Wager</button>
+                <div id="payoutInfo" class="payout-info">
+                    <p>Min Score for Payout: <span id="minScore">150</span></p>
+                    <p>Target Multiplier: <span id="maxMultiplier">2.0</span>x</p>
+                </div>
+            </div>
+            <p class="start-instruction hidden">Press SPACE to Start</p>
+            <p class="start-instruction hidden">Press SPACE to Jump</p>
+        </div>
+        <div id="gameOverScreen" class="screen hidden">
+            <h1 class="pixel-title" data-message="GROINED!">GROINED!</h1>
+            <p class="subtitle">You Win <span id="payoutTotal" class="payout-amount">0</span> $GRIND</p>
+            <div class="wager-form">
+                <label for="wagerAmountGameOver">Select Wager Amount:</label>
+                <select id="wagerAmountGameOver" class="pixel-select">
+                    <option value="1">1 $GRIND</option>
+                    <option value="5">5 $GRIND</option>
+                    <option value="10">10 $GRIND</option>
+                    <option value="25">25 $GRIND</option>
+                    <option value="50">50 $GRIND</option>
+                    <option value="100">100 $GRIND</option>
+                </select>
+                <button id="placeWagerGameOver" class="pixel-button">Place Wager</button>
+                <div id="payoutInfoGameOver" class="payout-info">
+                    <p>Min Score for Payout: <span id="minScoreGameOver">150</span></p>
+                    <p>Target Multiplier: <span id="maxMultiplierGameOver">2.0</span>x</p>
+                </div>
+            </div>
+            <div class="results-container">
+                <p class="breakdown">Score: <span id="payoutScore">0</span></p>
+                <p class="breakdown">Base Payout: <span id="payoutBase">0</span> $GRIND</p>
+                <p class="breakdown">Milestone Bonus: <span id="payoutBonus">0</span> $GRIND</p>
+                <p class="breakdown">New Balance: <span id="payoutBalance">10</span> $GRIND</p>
+            </div>
+            <p class="start-instruction hidden">Press SPACE to start</p>
+        </div>
+        <div id="higherWagerPopup" class="screen hidden">
+            <div class="higher-wager-box">
+                <div class="higher-wager-content">
+                    <div id="higherWagerInfo" class="higher-wager-info">
+                        <!-- Content will be dynamically populated -->
+                    </div>
+                    <button id="dismissPopup" class="pixel-button small">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="payout.js"></script>
+    <script src="scoreLogger.js"></script>
+    <script src="game.js"></script>
+</body>
+</html> 
