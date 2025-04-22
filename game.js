@@ -22,7 +22,7 @@ class Game {
         this.sounds = {
             jump: new Audio('./ASSETS/Sounds/jump.mp3'),
             collision: [],  // Changed to array to store multiple collision sounds
-            gameOver: new Audio('./ASSETS/Sounds/gameOver.mp3'),
+            gameOver: new Audio('./ASSETS/Sounds/gameover.mp3'),
             background: new Audio('./ASSETS/Sounds/background/background.mp3'),
             spark: new Audio('./ASSETS/Sounds/spark.mp3'),
             groined: [],  // Added array for groined sounds
@@ -115,7 +115,7 @@ class Game {
         // Initialize low obstacle images
         for (let i = 1; i <= 11; i++) {  // Changed from 7 to 11
             const img = new Image();
-            img.src = `./ASSETS/Low Obstacles/obstacle${i}.png`;
+            img.src = `./ASSETS/Low Obstacles/Obstacle${i}.png`;
             this.images.obstacles.low.push(img);
         }
         
@@ -126,7 +126,7 @@ class Game {
             this.images.obstacles.high.push(img);
         }
         
-        this.images.rail.src = './ASSETS/Railing/rail.png';
+        this.images.rail.src = './ASSETS/Railing/Rail.png';
         this.images.gap.src = './ASSETS/Railing/Gap.png';
         this.images.spark.frame1.src = './ASSETS/Effects/Spark1.png';
         this.images.spark.frame2.src = './ASSETS/Effects/Spark2.png';
