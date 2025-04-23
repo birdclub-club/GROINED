@@ -12,7 +12,7 @@ The easiest way to earn $GRIND! A high-stakes obstacle course game where getting
 6. Avoid obstacles to earn points
 7. Reach score milestones to earn payouts
 
-## �� Crypto Features
+## Crypto Features
 
 - Wager system using $GRIND tokens (1-100 $GRIND)
 - Payout system with base payouts and milestone bonuses
@@ -109,13 +109,15 @@ The game is built using:
    - Select new wager
    - See final score and balance
 
-## 🎯 Future Improvements
+## Future Improvements
 
+- On chain functionality on Abstract
+- Featured power-ups
+- Global leaderboard
+- high score bonus
 - More obstacle types
-- Additional power-ups
 - Enhanced visual effects
 - More sound variations
-- Additional game modes
 
 ## 🎮 Getting Started
 
