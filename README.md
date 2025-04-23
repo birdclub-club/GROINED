@@ -1,4 +1,4 @@
-# GROINED
+# GROINED (Off-chain beta)
 
 The easiest way to earn $GRIND! A high-stakes obstacle course game where getting hit in the groin can pay big rewards. Control a skateboarding hamster, place wagers, and multiply your earnings in this retro-style pixel game.
 
