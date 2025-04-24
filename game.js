@@ -1,9 +1,24 @@
 class Game {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
+        this.ctx = this.canvas.getContext('2d', { alpha: false });  // Disable alpha for better performance
+        
+        // Enable image smoothing for better quality
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
+        
         this.canvas.width = 1400;
         this.canvas.height = 600;
+        
+        // Add frame timing properties
+        this.lastFrameTime = performance.now();
+        this.deltaTime = 0;
+        this.targetFPS = 60;
+        this.frameInterval = 1000 / this.targetFPS;
+        this.accumulator = 0;
+        this.fixedTimeStep = 1 / 60; // Fixed time step for physics updates
+        this.lastRenderTime = 0; // Add last render time
+        this.renderInterval = 1000 / 60; // Target 60 FPS for rendering
         
         // Initialize payout system
         this.payoutSystem = new PayoutSystem();
@@ -150,8 +165,9 @@ class Game {
         // Background scrolling properties
         this.background = {
             x: 0,
-            width: 4200, // Increased from 3000 to 4200 (40% wider)
-            image: this.images.background
+            width: 4200,
+            image: this.images.background,
+            speed: 4  // Base speed for background
         };
         
         this.backgroundSpeed = 2;
@@ -211,7 +227,7 @@ class Game {
             initialJumpSpeed: 20,
             maxJumpForce: 100,
             groundY: this.canvas.height - 140,
-            maxJumpHeight: (this.canvas.height * 1.25) - 140,  // Changed to 1.25 for 25% above canvas height
+            maxJumpHeight: (this.canvas.height * 1.25) - 140,
             maxJumpTime: 300,
             jumpSpeed: 30,
             isHurt: false,
@@ -220,9 +236,12 @@ class Game {
             alternateLanding: true,
             currentSparkFrame: 'frame1',
             lastSparkFrameChange: 0,
-            hasReleasedSpace: false,  // Add flag to track space release
-            obstaclesJumped: 0,  // Track number of obstacles jumped in current jump
-            hasBeenJumped: false  // Added flag to track if obstacle has been jumped
+            hasReleasedSpace: false,
+            obstaclesJumped: 0,
+            hasBeenJumped: false,
+            isLanding: false,  // Add landing state
+            landingStartTime: 0,  // Add landing start time
+            landingDuration: 100  // Add landing duration in ms
         };
         
         this.jumpStartTime = 0;
@@ -333,6 +352,11 @@ class Game {
             const stake = parseInt(selectElement.value);
             if (stake > this.walletBalance) {
                 alert('Insufficient balance!');
+                selectElement.value = this.walletBalance;
+                updateWagerInfo(selectElement, 
+                    selectElement.id === 'wagerAmount' ? document.getElementById('minScore') : document.getElementById('minScoreGameOver'),
+                    selectElement.id === 'wagerAmount' ? document.getElementById('maxMultiplier') : document.getElementById('maxMultiplierGameOver')
+                );
                 return;
             }
             this.currentWager = stake;
@@ -457,60 +481,81 @@ class Game {
     createObstacle() {
         // Check if we should create a new obstacle
         if (Math.random() < 0.01 || this.pointsSinceLastObstacle >= 25) {
-            const baseWidth = 60;  // Adjust this to change obstacle width
-            const baseHeight = 70; // Adjust this to change obstacle height
+            const baseWidth = 60;
+            const baseHeight = 70;
             
             // Randomly choose obstacle type
             const obstacleType = Math.random();
             
+            // Calculate initial position relative to background
+            const initialX = this.canvas.width + this.background.x;
+            
             if (obstacleType < 0.2) { // 20% chance for a rail gap
                 this.obstacles.push({
-                    x: this.canvas.width,
+                    initialX: initialX,  // Store initial position
+                    x: this.canvas.width,  // Current position
                     y: this.canvas.height - 160 - this.rail.height + 120,
-                    width: 100,  // Adjust this to change gap width
+                    width: 100,
                     height: this.rail.height,
                     isGap: true,
                     isSpecial: false
                 });
             } else if (obstacleType < 0.5) { // 30% chance for high obstacle
-                // Determine available obstacle indices based on score
-                let availableIndices = [0]; // Start with just Obstacle1
+                let availableIndices = [0];
                 if (this.score > 350) {
-                    availableIndices.push(1); // Add Obstacle2 after score 350
+                    availableIndices.push(1);
                 }
                 if (this.score > 700) {
-                    availableIndices.push(2); // Add Obstacle3 after score 700
+                    availableIndices.push(2);
                 }
                 
-                // Randomly select from available obstacles
                 const selectedIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
                 
                 this.obstacles.push({
-                    x: this.canvas.width,
+                    initialX: initialX,  // Store initial position
+                    x: this.canvas.width,  // Current position
                     y: this.canvas.height - 160 - (baseHeight * 2) + 120,
                     width: baseWidth * 1.3,
                     height: baseHeight * 2,
                     isSpecial: true,
                     isGap: false,
-                    imageIndex: selectedIndex // Use the selected index based on score
+                    imageIndex: selectedIndex
                 });
             } else { // 50% chance for normal obstacle
                 this.obstacles.push({
-                    x: this.canvas.width,
+                    initialX: initialX,  // Store initial position
+                    x: this.canvas.width,  // Current position
                     y: this.canvas.height - 160 - (baseHeight * 1.2) + 120,
-                    width: baseWidth,        // Normal obstacles use base width
-                    height: baseHeight * 1.2, // Normal obstacles are 1.2x taller
+                    width: baseWidth,
+                    height: baseHeight * 1.2,
                     isSpecial: false,
                     isGap: false
                 });
             }
-            this.pointsSinceLastObstacle = 0;  // Reset counter after creating obstacle
+            this.pointsSinceLastObstacle = 0;
         }
     }
     
     update() {
         if (!this.gameStarted) return;
         
+        // Calculate delta time using performance.now() for more precise timing
+        const currentTime = performance.now();
+        this.deltaTime = (currentTime - this.lastFrameTime) / 1000; // Convert to seconds
+        this.lastFrameTime = currentTime;
+        
+        // Cap delta time to prevent large jumps
+        this.deltaTime = Math.min(this.deltaTime, 0.1);
+        
+        // Update game state with fixed time step
+        this.accumulator += this.deltaTime;
+        while (this.accumulator >= this.fixedTimeStep) {
+            this.fixedUpdate();
+            this.accumulator -= this.fixedTimeStep;
+        }
+    }
+    
+    fixedUpdate() {
         if (this.collisionAnimation.isActive) {
             // Handle collision animation
             const elapsed = Date.now() - this.collisionAnimation.startTime;
@@ -543,13 +588,12 @@ class Game {
         }
         
         // Update score based on time elapsed
-        const currentTime = Date.now();
-        const timeElapsed = currentTime - this.startTime;
-        const scoreUpdateInterval = 100; // Update score every 100ms
+        const timeElapsed = Date.now() - this.startTime;
+        const scoreUpdateInterval = 100;
         
-        if (currentTime - this.lastScoreUpdate >= scoreUpdateInterval) {
+        if (Date.now() - this.lastScoreUpdate >= scoreUpdateInterval) {
             this.score = Math.floor(timeElapsed / 100); // 1 point per 100ms
-            this.lastScoreUpdate = currentTime;
+            this.lastScoreUpdate = Date.now();
             this.pointsSinceLastObstacle++;  // Increment points since last obstacle
             
             // Check if we've reached the minimum score for the current wager
@@ -563,108 +607,54 @@ class Game {
                 }
             }
             
-            // Increase game speed based on score
-            if (this.score % 100 === 0) { // Increase speed every 100 points
-                this.gameSpeed += 0.5;
-            }
+            // Increase game speed smoothly based on score
+            this.gameSpeed = 4 + (this.score * 0.015); // Start at 4 and increase by 0.015 per point
         }
         
-        // Update background position based on game speed
-        this.background.x -= this.gameSpeed;
+        // Update background position with fixed time step
+        this.background.x -= this.gameSpeed * this.fixedTimeStep;
         
         // Reset background position when it moves off screen
         if (this.background.x <= -this.background.width) {
             this.background.x = 0;
         }
         
-        // Update rail position to match background speed
-        this.rail.x -= this.gameSpeed;
-        
-        // Reset rail position when it moves off screen
-        if (this.rail.x <= -this.rail.segmentWidth) {
-            this.rail.x = 0;
-        }
-        
-        // Update hamster position
-        if (this.hamster.jumping) {
-            const jumpDuration = Date.now() - this.jumpStartTime;
-            
-            if (this.spacePressed && jumpDuration < this.hamster.maxJumpTime) {
-                // Apply deceleration while jumping up
-                if (this.hamster.velocityY < 0) {  // Only decelerate if moving upward
-                    this.hamster.velocityY += this.hamster.jumpDeceleration;
-                }
-            } else {
-                // Apply gravity acceleration when falling
-                this.hamster.velocityY += this.hamster.gravity;
-            }
-            
-            // Update position based on velocity
-            this.hamster.y += this.hamster.velocityY;
-            
-            // Cap the maximum height
-            if (this.hamster.y <= this.canvas.height - this.hamster.maxJumpHeight) {
-                this.hamster.y = this.canvas.height - this.hamster.maxJumpHeight;
-                this.hamster.velocityY = 0;
-            }
-            
-            // Return to ground
-            if (this.hamster.y >= this.hamster.groundY) {
-                // Alternate between two landing positions
-                if (this.hamster.alternateLanding) {
-                    this.hamster.y = this.canvas.height - 140;  // Higher position
-                } else {
-                    this.hamster.y = this.canvas.height - 200;  // Lower position
-                    // Play spark sound when landing in lower position
-                    this.playSound('spark');
-                }
-                this.hamster.alternateLanding = !this.hamster.alternateLanding;  // Toggle landing position
-                this.hamster.jumping = false;
-                this.hamster.velocityY = 0;
-                
-                // Check if we jumped over multiple obstacles
-                if (this.hamster.obstaclesJumped >= 2) {
-                    // Select a random word based on number of obstacles jumped
-                    if (this.hamster.obstaclesJumped >= 3) {
-                        this.currentJumpWord = this.superJumpWords[Math.floor(Math.random() * this.superJumpWords.length)];
-                        this.isSuperJump = true;
-                    } else {
-                        this.currentJumpWord = this.jumpWords[Math.floor(Math.random() * this.jumpWords.length)];
-                        this.isSuperJump = false;
-                    }
-                    this.jumpWordStartTime = Date.now();
-                    this.jumpWordOpacity = 1;
-                }
-                
-                // Reset obstacles jumped counter
-                this.hamster.obstaclesJumped = 0;
-                
-                // Randomly select a new riding sprite when landing
-                this.hamster.currentRidingSprite = Math.random() < 0.5 ? 'riding1' : 'riding2';
-            }
-        }
+        // Update rail position to match background exactly
+        this.rail.x = this.background.x;
         
         // Create and update obstacles
         this.createObstacle();
         this.obstacles.forEach((obstacle, index) => {
-            obstacle.x -= this.gameSpeed;
+            // Calculate obstacle position relative to background
+            const relativeX = obstacle.initialX - this.background.x;
+            obstacle.x = relativeX;
+            
+            // If obstacle is off screen to the left, remove it
+            if (obstacle.x + obstacle.width < 0) {
+                this.obstacles.splice(index, 1);
+                if (!this.gameOver) {
+                    this.score++;
+                }
+            }
             
             // Check if hamster jumped over this obstacle
             if (this.hamster.jumping && !obstacle.isGap && 
                 this.hamster.x + this.hamster.width > obstacle.x + obstacle.width &&
                 this.hamster.x < obstacle.x + obstacle.width &&
                 this.hamster.y + this.hamster.height < obstacle.y &&
-                !obstacle.hasBeenJumped) {  // Only count each obstacle once
+                !obstacle.hasBeenJumped) {
                 this.hamster.obstaclesJumped++;
-                obstacle.hasBeenJumped = true;  // Mark this obstacle as jumped
+                obstacle.hasBeenJumped = true;
             }
             
+            // Check for collision
             if (!obstacle.isGap && this.checkCollision(this.hamster, obstacle)) {
                 this.hamster.isHurt = true;
                 this.collisionAnimation.isActive = true;
                 this.collisionAnimation.startTime = Date.now();
                 this.spacePressed = false;
                 this.hamster.jumping = false;
+                this.hamster.isLanding = false;
                 this.hamster.velocityY = 0;
                 
                 // Store current position before fading out
@@ -684,17 +674,6 @@ class Game {
                 // Play collision sound
                 this.playSound('collision');
             }
-            
-            // Remove obstacles that are off screen
-            if (obstacle.x + obstacle.width < 0) {
-                this.obstacles.splice(index, 1);
-                if (!this.gameOver) {
-                    this.score++;
-                    if (this.score % 4 === 0) {
-                        this.gameSpeed += 0.75;
-                    }
-                }
-            }
         });
     }
     
@@ -708,10 +687,13 @@ class Game {
         // Adjust collision box for riding1 sprite
         const rightOffset = (this.hamster.currentRidingSprite === 'riding1') ? 40 : 0;
         
-        // Add 5-pixel buffer to collision detection and 20-pixel overlap allowance for landing
+        // Use smaller overlap allowance during landing
+        const landingOverlap = this.hamster.isLanding ? 10 : 20;
+        
+        // Add 5-pixel buffer to collision detection and dynamic overlap allowance
         const collision = hamster.x + 5 < obstacleRight - 5 &&
                          hamsterRight - 5 - rightOffset > obstacle.x + 5 &&
-                         hamster.y + 5 < obstacleBottom - 5 + 20 &&  // Allow 20 more pixels of overlap when landing
+                         hamster.y + 5 < obstacleBottom - 5 + landingOverlap &&
                          hamsterBottom - 5 > obstacle.y + 5;
         
         if (collision) {
@@ -722,7 +704,8 @@ class Game {
                 width: hamster.width - rightOffset,
                 height: hamster.height,
                 right: hamsterRight - rightOffset,
-                bottom: hamsterBottom
+                bottom: hamsterBottom,
+                isLanding: this.hamster.isLanding
             });
             console.log('Obstacle:', {
                 x: obstacle.x,
@@ -746,8 +729,9 @@ class Game {
             return;
         }
 
-        // Clear canvas
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Clear canvas with a solid color for better performance
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Save context for zooming
         this.ctx.save();
@@ -779,7 +763,7 @@ class Game {
         // Draw backgrounds with scrolling
         this.ctx.drawImage(
             this.background.image,
-            this.background.x,
+            Math.floor(this.background.x),  // Round to prevent sub-pixel rendering
             10,
             this.background.width,
             this.canvas.height
@@ -789,7 +773,7 @@ class Game {
         if (this.background.x + this.background.width < this.canvas.width) {
             this.ctx.drawImage(
                 this.background.image,
-                this.background.x + this.background.width,
+                Math.floor(this.background.x + this.background.width),  // Round to prevent sub-pixel rendering
                 10,
                 this.background.width,
                 this.canvas.height
@@ -813,14 +797,17 @@ class Game {
         this.ctx.save();
         
         // Move to the hamster's position
-        this.ctx.translate(this.hamster.x + this.hamster.width/2, this.hamster.y + this.hamster.height/2);
+        this.ctx.translate(
+            Math.floor(this.hamster.x + this.hamster.width/2),  // Round to prevent sub-pixel rendering
+            Math.floor(this.hamster.y + this.hamster.height/2)   // Round to prevent sub-pixel rendering
+        );
         
         // If hurt, add rotation
         if (this.hamster.isHurt) {
-            const rotation = (Math.PI / 18) * (1 - 1/this.collisionAnimation.zoomLevel); // 10 degrees in radians
+            const rotation = (Math.PI / 18) * (1 - 1/this.collisionAnimation.zoomLevel);
             this.ctx.rotate(rotation);
         } else if (this.hamster.jumping && !this.hamster.isHurt) {
-            const rotation = (this.hamster.velocityY / this.hamster.initialJumpSpeed) * Math.PI/6; // Max 30 degrees
+            const rotation = (this.hamster.velocityY / this.hamster.initialJumpSpeed) * Math.PI/6;
             this.ctx.rotate(rotation);
         }
         
@@ -864,8 +851,8 @@ class Game {
             if (obstacle.isSpecial) {
                 this.ctx.drawImage(
                     this.images.obstacles.high[obstacle.imageIndex],
-                    obstacle.x,
-                    obstacle.y,
+                    Math.floor(obstacle.x),  // Round to prevent sub-pixel rendering
+                    Math.floor(obstacle.y),  // Round to prevent sub-pixel rendering
                     obstacle.width,
                     obstacle.height
                 );
@@ -876,23 +863,13 @@ class Game {
                 }
                 this.ctx.drawImage(
                     this.images.obstacles.low[obstacle.imageIndex],
-                    obstacle.x,
-                    obstacle.y,
+                    Math.floor(obstacle.x),  // Round to prevent sub-pixel rendering
+                    Math.floor(obstacle.y),  // Round to prevent sub-pixel rendering
                     obstacle.width,
                     obstacle.height
                 );
             }
         });
-        
-        // Remove hamster collision box for debugging
-        // this.ctx.strokeStyle = 'blue';
-        // this.ctx.lineWidth = 2;
-        // this.ctx.strokeRect(
-        //     this.hamster.x,
-        //     this.hamster.y,
-        //     this.hamster.width,
-        //     this.hamster.height
-        // );
         
         // Update score in the score bar
         if (this.gameStarted && !this.gameOver) {
@@ -907,14 +884,14 @@ class Game {
                 this.jumpWordOpacity = 1 - (elapsed / this.jumpWordDuration);
                 
                 // Calculate new position - move up and left
-                this.jumpWordY = this.canvas.height / 2 - (elapsed / this.jumpWordDuration) * 200; // Move up 200px
-                this.jumpWordX = this.canvas.width / 2 - 200; // Move left 200px
+                this.jumpWordY = this.canvas.height / 2 - (elapsed / this.jumpWordDuration) * 200;
+                this.jumpWordX = this.canvas.width / 2 - 200;
                 
                 // Set up the text style
                 this.ctx.font = '48px "Press Start 2P"';
                 this.ctx.fillStyle = this.isSuperJump ? 
-                    `rgba(255, 0, 255, ${this.jumpWordOpacity})` : // Magenta for super jumps
-                    `rgba(255, 215, 0, ${this.jumpWordOpacity})`; // Gold for regular jumps
+                    `rgba(255, 0, 255, ${this.jumpWordOpacity})` :
+                    `rgba(255, 215, 0, ${this.jumpWordOpacity})`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
                 
@@ -931,10 +908,9 @@ class Game {
         this.ctx.restore();
     }
     
-    // Add the drawRail helper method
     drawRail() {
         // Draw continuous rail
-        let currentX = this.rail.x;
+        let currentX = Math.floor(this.rail.x);
         
         // Draw rail segments until we cover the entire screen width
         while (currentX < this.canvas.width + this.rail.segmentWidth) {
@@ -950,8 +926,16 @@ class Game {
     }
     
     animate() {
-        this.update();
-        this.draw();
+        const currentTime = performance.now();
+        const elapsed = currentTime - this.lastRenderTime;
+        
+        // Only render if enough time has passed
+        if (elapsed >= this.renderInterval) {
+            this.update();
+            this.draw();
+            this.lastRenderTime = currentTime;
+        }
+        
         requestAnimationFrame(() => this.animate());
     }
 
